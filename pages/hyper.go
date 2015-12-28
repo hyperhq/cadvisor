@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"strings"
 	"time"
 
 	//"github.com/google/cadvisor/container/hyper"
@@ -29,6 +30,23 @@ import (
 )
 
 const HyperPage = "/hyper/"
+
+func getHyperDisplayName(cont info.ContainerReference) string {
+	if len(cont.Aliases) < 2 {
+		return cont.Name
+	}
+
+	podId := ""
+	podName := cont.Aliases[1]
+	for _, alias := range cont.Aliases {
+		if strings.HasPrefix(alias, "pod-") {
+			podId = alias
+			break
+		}
+	}
+
+	return fmt.Sprintf("%s (%s)", podId, podName)
+}
 
 func serveHyperPage(m manager.Manager, w http.ResponseWriter, u *url.URL) error {
 	start := time.Now()
@@ -50,7 +68,7 @@ func serveHyperPage(m manager.Manager, w http.ResponseWriter, u *url.URL) error 
 		subcontainers := make([]link, 0, len(conts))
 		for _, cont := range conts {
 			subcontainers = append(subcontainers, link{
-				Text: getContainerDisplayName(cont.ContainerReference),
+				Text: getHyperDisplayName(cont.ContainerReference),
 				Link: path.Join(rootDir, HyperPage, cont.ContainerReference.Name),
 			})
 		}
@@ -68,12 +86,12 @@ func serveHyperPage(m manager.Manager, w http.ResponseWriter, u *url.URL) error 
 		// 	return err
 		// }
 
-		dockerContainersText := "Hyper Containers"
+		hyperContainersText := "Hyper Containers"
 		data = &pageData{
-			DisplayName: dockerContainersText,
+			DisplayName: hyperContainersText,
 			ParentContainers: []link{
 				{
-					Text: dockerContainersText,
+					Text: hyperContainersText,
 					Link: path.Join(rootDir, HyperPage),
 				}},
 			Subcontainers: subcontainers,
@@ -87,11 +105,11 @@ func serveHyperPage(m manager.Manager, w http.ResponseWriter, u *url.URL) error 
 		reqParams := info.ContainerInfoRequest{
 			NumStats: 60,
 		}
-		cont, err := m.HyperContainer(containerName[1:], &reqParams)
+		cont, err := m.HyperContainer(containerName, &reqParams)
 		if err != nil {
 			return fmt.Errorf("failed to get container %q with error: %v", containerName, err)
 		}
-		displayName := getContainerDisplayName(cont.ContainerReference)
+		displayName := getHyperDisplayName(cont.ContainerReference)
 
 		// Make a list of the parent containers and their links
 		var parentContainers []link

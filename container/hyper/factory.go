@@ -15,6 +15,8 @@
 package hyper
 
 import (
+	"strings"
+
 	"github.com/golang/glog"
 	"github.com/google/cadvisor/container"
 	"github.com/google/cadvisor/fs"
@@ -37,6 +39,9 @@ func (self *hyperFactory) String() string {
 }
 
 func (self *hyperFactory) NewContainerHandler(name string, inHostNamespace bool) (handler container.ContainerHandler, err error) {
+	if strings.HasSuffix(name, "/emulator") {
+		name = strings.TrimSuffix(name, "/emulator")
+	}
 	handler, err = newHyperContainerHandler(
 		self.client,
 		name,

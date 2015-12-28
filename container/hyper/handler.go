@@ -52,6 +52,7 @@ func newHyperContainerHandler(
 	handler := &hyperContainerHandler{
 		client:             client,
 		fsInfo:             fsInfo,
+		alias:              []string{name},
 		machineInfoFactory: machineInfoFactory,
 		stopWatcher:        make(chan error),
 		containers:         make(map[string]string),
@@ -72,9 +73,13 @@ func newHyperContainerHandler(
 	}
 
 	pod := pods[0]
-	handler.name = pod.PodName
+	handler.name = name
 	handler.id = pod.PodID
-	handler.alias = []string{pod.PodName, vmName, pod.PodID}
+
+	alias := []string{pod.PodName, vmName, pod.PodID}
+	for _, a := range alias {
+		handler.alias = append(handler.alias, a, "/"+a)
+	}
 
 	return handler, nil
 }
@@ -101,13 +106,21 @@ func (self *hyperContainerHandler) GetSpec() (info.ContainerSpec, error) {
 	// }
 
 	// TODO: CPU, Memory, Fs, Network, DiskIo
+	spec.CreationTime = time.Now().Add(-time.Hour)
+	spec.Cpu = info.CpuSpec{Limit: 1024}
+	spec.HasCpu = true
+
+	spec.Memory = info.MemorySpec{Limit: 18446744073709551615, SwapLimit: 18446744073709551615}
+	spec.HasMemory = true
+	spec.HasDiskIo = true
+	spec.HasNetwork = true
 
 	return spec, nil
 }
 
 func (self *hyperContainerHandler) GetStats() (*info.ContainerStats, error) {
 	// TODO: get stats
-	stats := info.ContainerStats{}
+	stats := info.ContainerStats{Timestamp: time.Now().Add(-15 * time.Minute)}
 	// stats, err := containerlibcontainer.GetStats(self.cgroupManager, self.rootFs, self.pid)
 	// if err != nil {
 	// 	return stats, err
@@ -119,6 +132,7 @@ func (self *hyperContainerHandler) GetStats() (*info.ContainerStats, error) {
 	// 	return stats, err
 	// }
 
+	// TODO: replace demo stats
 	stats.Cpu = info.CpuStats{
 		Usage: info.CpuUsage{
 			Total:  24750780,
@@ -152,7 +166,25 @@ func (self *hyperContainerHandler) GetStats() (*info.ContainerStats, error) {
 		},
 	}
 
-	stats.Network = info.NetworkStats{}
+	stats.Network = info.NetworkStats{
+		InterfaceStats: info.InterfaceStats{
+			Name:      "eth0",
+			RxBytes:   123223,
+			RxPackets: 128,
+			TxBytes:   10240,
+			TxPackets: 10,
+		},
+		Interfaces: []info.InterfaceStats{
+			{
+				Name:      "eth0",
+				RxBytes:   123223,
+				RxPackets: 128,
+
+				TxBytes:   10240,
+				TxPackets: 10,
+			},
+		},
+	}
 
 	stats.Filesystem = []info.FsStats{}
 

@@ -52,6 +52,13 @@ func (self *hyperFactory) NewContainerHandler(name string, inHostNamespace bool)
 }
 
 func (self *hyperFactory) CanHandleAndAccept(name string) (bool, bool, error) {
+	// Format: /hyper/containerID
+	if strings.HasPrefix(name, "/hyper") {
+		if len(strings.Split(name, "/")) == 3 {
+			return true, true, nil
+		}
+	}
+
 	_, err := isHyperVirtualMachine(name)
 	if err != nil {
 		return false, false, nil

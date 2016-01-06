@@ -17,6 +17,7 @@ package hyper
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/golang/glog"
@@ -58,6 +59,22 @@ func newHyperContainerHandler(
 		containers:         make(map[string]string),
 	}
 
+	// Process hyper containers
+	if strings.HasPrefix(name, "/hyper") {
+		containerId := strings.Split(name, "/")[2]
+		container, err := client.GetContainer(containerId)
+		if err != nil {
+			return handler, err
+		}
+
+		handler.id = containerId
+		handler.name = name
+		handler.alias = append(handler.alias, container.Name,
+			containerId, "/"+containerId)
+		return handler, nil
+	}
+
+	// Process hyper pods
 	vmName, err := isHyperVirtualMachine(name)
 	if err != nil {
 		return handler, err
@@ -202,7 +219,7 @@ func (self *hyperContainerHandler) ListContainers(listType container.ListType) (
 	ret := make([]info.ContainerReference, 0, len(containers))
 	for _, c := range containers {
 		ret = append(ret, info.ContainerReference{
-			Name:      c.name,
+			Name:      "/hyper/" + c.containerID,
 			Namespace: HyperNamespace,
 		})
 	}

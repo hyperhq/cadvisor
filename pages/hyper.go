@@ -32,20 +32,20 @@ import (
 const HyperPage = "/hyper/"
 
 func getHyperDisplayName(cont info.ContainerReference) string {
-	if len(cont.Aliases) < 2 {
+	if len(cont.Aliases) < 3 {
 		return cont.Name
 	}
 
-	podId := ""
-	podName := cont.Aliases[1]
+	containerID := cont.Aliases[2]
+	containerName := cont.Aliases[1]
 	for _, alias := range cont.Aliases {
 		if strings.HasPrefix(alias, "pod-") {
-			podId = alias
+			containerID = alias
 			break
 		}
 	}
 
-	return fmt.Sprintf("%s (%s)", podId, podName)
+	return fmt.Sprintf("%s (%s)", containerID, containerName)
 }
 
 func serveHyperPage(m manager.Manager, w http.ResponseWriter, u *url.URL) error {

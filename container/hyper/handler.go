@@ -41,6 +41,9 @@ type hyperContainerHandler struct {
 	containers  map[string]string
 	stopWatcher chan error
 
+	// container's podID
+	podID string
+
 	// Time at which this container was created.
 	creationTime time.Time
 }
@@ -54,6 +57,7 @@ func newHyperContainerHandler(
 		client:             client,
 		fsInfo:             fsInfo,
 		alias:              []string{name},
+		isPod:              true,
 		machineInfoFactory: machineInfoFactory,
 		stopWatcher:        make(chan error),
 		containers:         make(map[string]string),
@@ -69,6 +73,8 @@ func newHyperContainerHandler(
 
 		handler.id = containerId
 		handler.name = name
+		handler.podID = container.PodID
+		handler.isPod = false
 		handler.alias = append(handler.alias, container.Name,
 			containerId, "/"+containerId)
 		return handler, nil
@@ -92,6 +98,7 @@ func newHyperContainerHandler(
 	pod := pods[0]
 	handler.name = name
 	handler.id = pod.PodID
+	handler.podID = pod.PodID
 
 	alias := []string{pod.PodName, vmName, pod.PodID}
 	for _, a := range alias {
@@ -116,14 +123,18 @@ func (self *hyperContainerHandler) ContainerReference() (info.ContainerReference
 func (self *hyperContainerHandler) GetSpec() (info.ContainerSpec, error) {
 	var spec info.ContainerSpec
 
-	// Get machine info.
-	// mi, err := self.machineInfoFactory.GetMachineInfo()
-	// if err != nil {
-	// 	return spec, err
-	// }
+	podInfo, err := self.client.GetPod(self.podID)
+	if err != nil {
+		return spec, err
+	}
+
+	startedAt, err := parseTimeString(podInfo.Status.StartTime)
+	if err != nil {
+		return spec, err
+	}
+	spec.CreationTime = startedAt
 
 	// TODO: CPU, Memory, Fs, Network, DiskIo
-	spec.CreationTime = time.Now().Add(-time.Hour)
 	spec.Cpu = info.CpuSpec{Limit: 1024}
 	spec.HasCpu = true
 
@@ -131,6 +142,7 @@ func (self *hyperContainerHandler) GetSpec() (info.ContainerSpec, error) {
 	spec.HasMemory = true
 	spec.HasDiskIo = true
 	spec.HasNetwork = true
+	spec.HasCustomMetrics = false
 
 	return spec, nil
 }

@@ -380,6 +380,24 @@ func (client *HyperClient) GetContainer(name string) (*Container, error) {
 	return &result, nil
 }
 
+func (client *HyperClient) GetPod(name string) (*PodInfo, error) {
+	values := url.Values{}
+	values.Set(KEY_POD_NAME, name)
+
+	body, _, err := client.call("GET", "/pod/info?"+values.Encode(), "", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var result PodInfo
+	err = json.Unmarshal(body, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
 func (client *HyperClient) ListContainers() ([]HyperContainer, error) {
 	v := url.Values{}
 	v.Set(KEY_ITEM, TYPE_CONTAINER)

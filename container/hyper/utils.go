@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
 
 func isHyperVirtualMachine(name string) (string, error) {
@@ -28,4 +29,19 @@ func isHyperVirtualMachine(name string) (string, error) {
 	}
 
 	return "", fmt.Errorf("%s isn't a hyper vm", name)
+}
+
+func parseTimeString(str string) (time.Time, error) {
+	t := time.Date(0, 0, 0, 0, 0, 0, 0, time.Local)
+	if str == "" {
+		return t, nil
+	}
+
+	layout := "2006-01-02T15:04:05Z"
+	t, err := time.Parse(layout, str)
+	if err != nil {
+		return t, err
+	}
+
+	return t, nil
 }

@@ -134,12 +134,12 @@ func (self *hyperContainerHandler) GetSpec() (info.ContainerSpec, error) {
 	}
 	spec.CreationTime = startedAt
 
-	// TODO: CPU, Memory, Fs, Network, DiskIo
-	spec.Cpu = info.CpuSpec{Limit: 1024}
+	spec.Cpu = info.CpuSpec{Limit: uint64(1024 * podInfo.Spec.Vcpu)}
 	spec.HasCpu = true
 
-	spec.Memory = info.MemorySpec{Limit: 18446744073709551615, SwapLimit: 18446744073709551615}
+	spec.Memory = info.MemorySpec{Limit: uint64(1024 * 1024 * podInfo.Spec.Memory)}
 	spec.HasMemory = true
+
 	spec.HasDiskIo = true
 	spec.HasNetwork = true
 	spec.HasCustomMetrics = false
@@ -147,21 +147,9 @@ func (self *hyperContainerHandler) GetSpec() (info.ContainerSpec, error) {
 	return spec, nil
 }
 
-func (self *hyperContainerHandler) GetStats() (*info.ContainerStats, error) {
-	// TODO: get stats
-	stats := info.ContainerStats{Timestamp: time.Now().Add(-15 * time.Minute)}
-	// stats, err := containerlibcontainer.GetStats(self.cgroupManager, self.rootFs, self.pid)
-	// if err != nil {
-	// 	return stats, err
-	// }
+func (self *hyperContainerHandler) fakeStats() (*info.ContainerStats, error) {
+	stats := info.ContainerStats{Timestamp: time.Now()}
 
-	// Get filesystem stats.
-	// err = self.getFsStats(stats)
-	// if err != nil {
-	// 	return stats, err
-	// }
-
-	// TODO: replace demo stats
 	stats.Cpu = info.CpuStats{
 		Usage: info.CpuUsage{
 			Total:  24750780,
@@ -217,6 +205,91 @@ func (self *hyperContainerHandler) GetStats() (*info.ContainerStats, error) {
 
 	stats.Filesystem = []info.FsStats{}
 
+	stats.TaskStats = info.LoadStats{}
+
+	return &stats, nil
+}
+
+func (self *hyperContainerHandler) GetStats() (*info.ContainerStats, error) {
+	stats := info.ContainerStats{
+		Timestamp: time.Now(),
+		DiskIo: info.DiskIoStats{
+			IoServiceBytes: make([]info.PerDiskStats, 0, 1),
+			IoServiced:     make([]info.PerDiskStats, 0, 1),
+		},
+		Network: info.NetworkStats{
+			Interfaces: make([]info.InterfaceStats, 0, 1),
+		},
+	}
+
+	// TODO: container stats is not supported now
+	if !self.isPod {
+		return self.fakeStats()
+	}
+
+	podStats, err := self.client.GetPodStats(self.podID)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to get hyper pod stats: %v", err)
+
+	}
+
+	stats.Cpu = info.CpuStats{
+		Usage: info.CpuUsage{
+			Total:  podStats.Cpu.Usage.Total,
+			PerCpu: podStats.Cpu.Usage.PerCpu,
+			User:   podStats.Cpu.Usage.User,
+			System: podStats.Cpu.Usage.System,
+		},
+	}
+
+	for _, stat := range podStats.Block.IoServiceBytesRecursive {
+		stats.DiskIo.IoServiceBytes = append(stats.DiskIo.IoServiceBytes,
+			info.PerDiskStats{
+				Major: stat.Major,
+				Minor: stat.Minor,
+				Stats: stat.Stat,
+			})
+	}
+
+	for _, stat := range podStats.Block.IoServicedRecursive {
+		stats.DiskIo.IoServiced = append(stats.DiskIo.IoServiced,
+			info.PerDiskStats{
+				Major: stat.Major,
+				Minor: stat.Minor,
+				Stats: stat.Stat,
+			})
+	}
+
+	stats.Memory = info.MemoryStats{
+		Usage: podStats.Memory.Usage,
+	}
+
+	for _, stat := range podStats.Network.Interfaces {
+		stats.Network.Interfaces = append(stats.Network.Interfaces,
+			info.InterfaceStats{
+				Name:      stat.Name,
+				RxBytes:   stat.RxBytes,
+				RxDropped: stat.RxDropped,
+				RxErrors:  stat.RxErrors,
+				RxPackets: stat.RxPackets,
+				TxBytes:   stat.TxBytes,
+				TxPackets: stat.TxPackets,
+				TxErrors:  stat.TxErrors,
+				TxDropped: stat.TxDropped,
+			})
+
+		stats.Network.RxBytes += stat.RxBytes
+		stats.Network.RxPackets += stat.RxPackets
+		stats.Network.RxErrors += stat.RxErrors
+		stats.Network.RxDropped += stat.RxDropped
+		stats.Network.TxBytes += stat.TxBytes
+		stats.Network.TxPackets += stat.TxPackets
+		stats.Network.TxErrors += stat.TxErrors
+		stats.Network.TxDropped += stat.TxDropped
+	}
+
+	// TODO: fsstats and taskstats is not supported now
+	stats.Filesystem = []info.FsStats{}
 	stats.TaskStats = info.LoadStats{}
 
 	return &stats, nil

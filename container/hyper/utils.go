@@ -17,6 +17,7 @@ package hyper
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -44,4 +45,18 @@ func parseTimeString(str string) (time.Time, error) {
 	}
 
 	return t, nil
+}
+
+func floatToInt64(src string) string {
+	dst, err := strconv.ParseFloat(src, 10)
+	if err != nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%v", int64(dst))
+}
+
+func transformJson(src string) string {
+	re := regexp.MustCompile(`\d\.\d+[eE]\+\d\d`)
+	return re.ReplaceAllStringFunc(src, floatToInt64)
 }

@@ -244,7 +244,8 @@ func (client *HyperClient) GetPodStats(podID string) (*PodStats, error) {
 	}
 
 	var stats PodStats
-	err = json.Unmarshal(body, &stats)
+	podStats := transformJson(string(body))
+	err = json.Unmarshal([]byte(podStats), &stats)
 	if err != nil {
 		return nil, err
 	}

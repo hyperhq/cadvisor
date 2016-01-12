@@ -73,20 +73,20 @@ func serveHyperPage(m manager.Manager, w http.ResponseWriter, u *url.URL) error 
 			})
 		}
 
-		// // Get Hyper status
-		// status, err := m.HyperInfo()
-		// if err != nil {
-		// 	return err
-		// }
-		//
-		// dockerStatus, driverStatus := toStatusKV(status)
-		// // Get Docker Images
-		// images, err := m.DockerImages()
-		// if err != nil {
-		// 	return err
-		// }
+		// Get Hyper status
+		status, err := m.HyperInfo()
+		if err != nil {
+			return err
+		}
+		hyperStatus, driverStatus := toStatusKV(status)
 
-		hyperContainersText := "Hyper Containers"
+		// Get Images
+		images, err := m.HyperImages()
+		if err != nil {
+			return err
+		}
+
+		hyperContainersText := "Hyper Pods"
 		data = &pageData{
 			DisplayName: hyperContainersText,
 			ParentContainers: []link{
@@ -94,11 +94,11 @@ func serveHyperPage(m manager.Manager, w http.ResponseWriter, u *url.URL) error 
 					Text: hyperContainersText,
 					Link: path.Join(rootDir, HyperPage),
 				}},
-			Subcontainers: subcontainers,
-			Root:          rootDir,
-			//DockerStatus:       dockerStatus,
-			// DockerDriverStatus: driverStatus,
-			// DockerImages: images,
+			Subcontainers:      subcontainers,
+			Root:               rootDir,
+			DockerStatus:       hyperStatus,
+			DockerDriverStatus: driverStatus,
+			DockerImages:       images,
 		}
 	} else {
 		// Get the container.
@@ -114,7 +114,7 @@ func serveHyperPage(m manager.Manager, w http.ResponseWriter, u *url.URL) error 
 		// Make a list of the parent containers and their links
 		var parentContainers []link
 		parentContainers = append(parentContainers, link{
-			Text: "Hyper Containers",
+			Text: "Hyper Pods",
 			Link: path.Join(rootDir, HyperPage),
 		})
 		parentContainers = append(parentContainers, link{

@@ -54,7 +54,7 @@ const containersHtmlTemplate = `
       {{end}}
       {{if .IsRoot}}
       <div class="col-sm-12">
-        <h4><a href="../hyper">Hyper Containers</a></h4>
+        <h4><a href="../hyper">Hyper Pods</a></h4>
       </div>
       {{end}}
       {{if .Subcontainers}}

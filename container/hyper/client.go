@@ -468,21 +468,21 @@ func (client *HyperClient) ListImages() ([]HyperImage, error) {
 		}
 
 		var imageHyper HyperImage
-		imageHyper.repository = imageDesc[0]
-		imageHyper.tag = imageDesc[1]
-		imageHyper.imageID = imageDesc[2]
+		imageHyper.Repository = imageDesc[0]
+		imageHyper.Tag = imageDesc[1]
+		imageHyper.ImageID = imageDesc[2]
 
 		createdAt, err := strconv.ParseInt(imageDesc[3], 10, 0)
 		if err != nil {
 			return nil, err
 		}
-		imageHyper.createdAt = createdAt
+		imageHyper.CreatedAt = createdAt
 
 		virtualSize, err := strconv.ParseInt(imageDesc[4], 10, 0)
 		if err != nil {
 			return nil, err
 		}
-		imageHyper.virtualSize = virtualSize
+		imageHyper.VirtualSize = virtualSize
 
 		hyperImages = append(hyperImages, imageHyper)
 	}
@@ -663,7 +663,7 @@ func (client *HyperClient) Attach(opts AttachToContainerOptions) error {
 func (client *HyperClient) IsImagePresent(repo, tag string) (bool, error) {
 	if outputs, err := client.ListImages(); err == nil {
 		for _, imgInfo := range outputs {
-			if imgInfo.repository == repo && imgInfo.tag == tag {
+			if imgInfo.Repository == repo && imgInfo.Tag == tag {
 				return true, nil
 			}
 		}

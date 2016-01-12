@@ -117,6 +117,12 @@ type Manager interface {
 	// Get details about interesting docker images.
 	DockerImages() ([]DockerImage, error)
 
+	// Get status information about hyper.
+	HyperInfo() (DockerStatus, error)
+
+	// Get details about interesting hyper images.
+	HyperImages() ([]DockerImage, error)
+
 	// Returns debugging information. Map of lines per category.
 	DebugInfo() map[string][]string
 }
@@ -1311,4 +1317,73 @@ func (m *manager) DebugInfo() map[string][]string {
 
 	debugInfo["Managed containers"] = lines
 	return debugInfo
+}
+
+func (m *manager) HyperInfo() (DockerStatus, error) {
+	hyperClient := hyper.NewHyperClient()
+	info, err := hyperClient.Info()
+	if err != nil {
+		return DockerStatus{}, err
+	}
+
+	hyperVersion, err := hyperClient.Version()
+	if err != nil {
+		return DockerStatus{}, err
+	}
+
+	out := DockerStatus{
+		Version:      hyperVersion,
+		DriverStatus: make(map[string]string),
+	}
+	if val, ok := info["KernelVersion"]; ok {
+		out.KernelVersion = val.(string)
+	}
+	if val, ok := info["OperatingSystem"]; ok {
+		out.OS = val.(string)
+	}
+	if val, ok := info["Name"]; ok {
+		out.Hostname = val.(string)
+	}
+	if val, ok := info["DockerRootDir"]; ok {
+		out.RootDir = val.(string)
+	}
+	if val, ok := info["Driver"]; ok {
+		out.Driver = val.(string)
+	}
+	if val, ok := info["ExecutionDriver"]; ok {
+		out.ExecDriver = val.(string)
+	}
+	if val, ok := info["Images"]; ok {
+		out.NumImages = int(val.(float64))
+	}
+	if val, ok := info["Containers"]; ok {
+		out.NumContainers = int(val.(float64))
+	}
+	if val, ok := info["DriverStatus"]; ok {
+		for _, value := range val.([]interface{}) {
+			v := value.([]interface{})
+			out.DriverStatus[v[0].(string)] = v[1].(string)
+		}
+	}
+	return out, nil
+}
+
+func (m *manager) HyperImages() ([]DockerImage, error) {
+	hyperClient := hyper.NewHyperClient()
+	images, err := hyperClient.ListImages()
+	if err != nil {
+		return nil, err
+	}
+
+	out := []DockerImage{}
+	for _, image := range images {
+		di := DockerImage{
+			ID:          image.ImageID,
+			RepoTags:    []string{fmt.Sprintf("%v:%v", image.Repository, image.Tag)},
+			Created:     image.CreatedAt,
+			VirtualSize: image.VirtualSize,
+		}
+		out = append(out, di)
+	}
+	return out, nil
 }

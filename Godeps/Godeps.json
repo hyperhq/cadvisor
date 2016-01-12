@@ -48,6 +48,16 @@
 			"Rev": "a34a1d598c6096ed8b5ce5219e77d68e5cd85462"
 		},
 		{
+			"ImportPath": "github.com/docker/docker/pkg/parsers",
+			"Comment": "v1.8.3-1-g2732df1",
+			"Rev": "2732df1dfb35f797a90e163afffe23564600407b"
+		},
+		{
+			"ImportPath": "github.com/docker/docker/pkg/stdcopy",
+			"Comment": "v1.8.3-1-g2732df1",
+			"Rev": "2732df1dfb35f797a90e163afffe23564600407b"
+		},
+		{
 			"ImportPath": "github.com/docker/docker/pkg/symlink",
 			"Comment": "v1.9.1",
 			"Rev": "a34a1d598c6096ed8b5ce5219e77d68e5cd85462"

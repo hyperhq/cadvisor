@@ -326,6 +326,11 @@ func (self *hyperContainerHandler) ListProcesses(listType container.ListType) ([
 }
 
 func (self *hyperContainerHandler) WatchSubcontainers(events chan container.SubcontainerEvent) error {
+	// Disable subcontainers watcher since we can't fetch container data now
+	if self != nil {
+		return nil
+	}
+
 	timer := time.NewTimer(WatchInterval)
 	if !self.isPod {
 		return nil

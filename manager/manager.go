@@ -153,6 +153,7 @@ func New(memoryCache *memory.InMemoryCache, sysfs sysfs.SysFs, maxHousekeepingIn
 	newManager := &manager{
 		containers:               make(map[namespacedContainerName]*containerData),
 		quitChannels:             make([]chan error, 0, 2),
+		eventsChannel:            make(chan container.SubcontainerEvent, 16),
 		memoryCache:              memoryCache,
 		fsInfo:                   fsInfo,
 		cadvisorContainer:        selfContainer,
@@ -199,6 +200,7 @@ type manager struct {
 	inHostNamespace          bool
 	loadReader               cpuload.CpuLoadReader
 	eventHandler             events.EventManager
+	eventsChannel            chan container.SubcontainerEvent
 	startupTime              time.Time
 	maxHousekeepingInterval  time.Duration
 	allowDynamicHousekeeping bool
@@ -825,7 +827,7 @@ func (m *manager) createContainer(containerName string) error {
 	}
 
 	logUsage := *logCadvisorUsage && containerName == m.cadvisorContainer
-	cont, err := newContainerData(containerName, m.memoryCache, handler, m.loadReader, logUsage, collectorManager, m.maxHousekeepingInterval, m.allowDynamicHousekeeping)
+	cont, err := newContainerData(containerName, m.memoryCache, handler, m.loadReader, logUsage, collectorManager, m.maxHousekeepingInterval, m.allowDynamicHousekeeping, m.eventsChannel)
 	if err != nil {
 		return err
 	}
@@ -1030,8 +1032,7 @@ func (self *manager) watchForNewContainers(quit chan error) error {
 	}
 
 	// Register for new subcontainers.
-	eventsChannel := make(chan container.SubcontainerEvent, 16)
-	err := root.handler.WatchSubcontainers(eventsChannel)
+	err := root.handler.WatchSubcontainers(self.eventsChannel)
 	if err != nil {
 		return err
 	}
@@ -1046,7 +1047,7 @@ func (self *manager) watchForNewContainers(quit chan error) error {
 	go func() {
 		for {
 			select {
-			case event := <-eventsChannel:
+			case event := <-self.eventsChannel:
 				switch {
 				case event.EventType == container.SubcontainerAdd:
 					err = self.createContainer(event.Name)

@@ -75,7 +75,7 @@ func newHyperContainerHandler(
 		handler.name = name
 		handler.podID = container.PodID
 		handler.isPod = false
-		handler.alias = append(handler.alias, container.Name,
+		handler.alias = append(handler.alias, "hyper://"+container.Name,
 			containerId, "/"+containerId)
 		return handler, nil
 	}
@@ -109,6 +109,7 @@ func newHyperContainerHandler(
 }
 
 func (self *hyperContainerHandler) Cleanup() {
+	self.StopWatchingSubcontainers()
 }
 
 func (self *hyperContainerHandler) ContainerReference() (info.ContainerReference, error) {
@@ -303,10 +304,14 @@ func (self *hyperContainerHandler) ListContainers(listType container.ListType) (
 
 	ret := make([]info.ContainerReference, 0, len(containers))
 	for _, c := range containers {
-		ret = append(ret, info.ContainerReference{
-			Name:      "/hyper/" + c.containerID,
-			Namespace: HyperNamespace,
-		})
+		if c.podID == self.podID {
+			cotainerName := "/hyper/" + c.containerID
+			self.containers[cotainerName] = cotainerName
+			ret = append(ret, info.ContainerReference{
+				Name:      cotainerName,
+				Namespace: HyperNamespace,
+			})
+		}
 	}
 
 	return ret, nil
@@ -321,37 +326,51 @@ func (self *hyperContainerHandler) ListProcesses(listType container.ListType) ([
 }
 
 func (self *hyperContainerHandler) WatchSubcontainers(events chan container.SubcontainerEvent) error {
+	timer := time.NewTimer(WatchInterval)
+	if !self.isPod {
+		return nil
+	}
+
 	go func(self *hyperContainerHandler) {
 		for {
-			time.Sleep(WatchInterval)
-			containers, err := self.client.ListContainers()
-			if err != nil {
-				glog.Errorf("Error list hyper containers: %v", err)
-				continue
-			}
+			select {
+			case <-self.stopWatcher:
+				self.stopWatcher <- nil
+				return
+			case <-timer.C:
+				containers, err := self.client.ListContainers()
+				if err != nil {
+					glog.Errorf("Error list hyper containers: %v", err)
+					continue
+				}
 
-			newContainerMap := make(map[string]string)
-			for _, c := range containers {
-				containerName := c.name
-				newContainerMap[containerName] = containerName
+				newContainerMap := make(map[string]string)
+				for _, c := range containers {
+					if c.podID != self.podID {
+						continue
+					}
 
-				if _, ok := self.containers[containerName]; !ok {
-					self.containers[containerName] = containerName
-					// Deliver the event.
-					events <- container.SubcontainerEvent{
-						EventType: container.SubcontainerAdd,
-						Name:      containerName,
+					containerName := "/hyper/" + c.containerID
+					newContainerMap[containerName] = containerName
+
+					if _, ok := self.containers[containerName]; !ok {
+						self.containers[containerName] = containerName
+						// Deliver the event.
+						events <- container.SubcontainerEvent{
+							EventType: container.SubcontainerAdd,
+							Name:      containerName,
+						}
 					}
 				}
-			}
 
-			for k := range self.containers {
-				if _, ok := newContainerMap[k]; !ok {
-					delete(self.containers, k)
-					// Deliver the event.
-					events <- container.SubcontainerEvent{
-						EventType: container.SubcontainerDelete,
-						Name:      k,
+				for k := range self.containers {
+					if _, ok := newContainerMap[k]; !ok {
+						delete(self.containers, k)
+						// Deliver the event.
+						events <- container.SubcontainerEvent{
+							EventType: container.SubcontainerDelete,
+							Name:      k,
+						}
 					}
 				}
 			}

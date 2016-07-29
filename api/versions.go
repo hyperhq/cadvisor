@@ -403,7 +403,10 @@ func (self *version2_0) HandleRequest(requestType string, request []string, m ma
 		glog.V(4).Infof("Api - Stats: Looking for stats for container %q, options %+v", name, opt)
 		infos, err := m.GetRequestedContainersInfo(name, opt)
 		if err != nil {
-			return err
+			if len(infos) == 0 {
+				return err
+			}
+			glog.Errorf("Error calling GetRequestedContainersInfo: %v", err)
 		}
 		contStats := make(map[string][]v2.DeprecatedContainerStats, 0)
 		for name, cinfo := range infos {
@@ -509,7 +512,7 @@ func (self *version2_1) Version() string {
 }
 
 func (self *version2_1) SupportedRequestTypes() []string {
-	return self.baseVersion.SupportedRequestTypes()
+	return append([]string{machineStatsApi}, self.baseVersion.SupportedRequestTypes()...)
 }
 
 func (self *version2_1) HandleRequest(requestType string, request []string, m manager.Manager, w http.ResponseWriter, r *http.Request) error {
@@ -524,7 +527,10 @@ func (self *version2_1) HandleRequest(requestType string, request []string, m ma
 		glog.V(4).Infof("Api - MachineStats(%v)", request)
 		cont, err := m.GetRequestedContainersInfo("/", opt)
 		if err != nil {
-			return err
+			if len(cont) == 0 {
+				return err
+			}
+			glog.Errorf("Error calling GetRequestedContainersInfo: %v", err)
 		}
 		return writeResult(v2.MachineStatsFromV1(cont["/"]), w)
 	case statsApi:
@@ -532,11 +538,21 @@ func (self *version2_1) HandleRequest(requestType string, request []string, m ma
 		glog.V(4).Infof("Api - Stats: Looking for stats for container %q, options %+v", name, opt)
 		conts, err := m.GetRequestedContainersInfo(name, opt)
 		if err != nil {
-			return err
+			if len(conts) == 0 {
+				return err
+			}
+			glog.Errorf("Error calling GetRequestedContainersInfo: %v", err)
 		}
-		contStats := make(map[string][]*v2.ContainerStats, len(conts))
+		contStats := make(map[string]v2.ContainerInfo, len(conts))
 		for name, cont := range conts {
-			contStats[name] = v2.ContainerStatsFromV1(&cont.Spec, cont.Stats)
+			if name == "/" {
+				// Root cgroup stats should be exposed as machine stats
+				continue
+			}
+			contStats[name] = v2.ContainerInfo{
+				Spec:  v2.ContainerSpecFromV1(&cont.Spec, cont.Aliases, cont.Namespace),
+				Stats: v2.ContainerStatsFromV1(&cont.Spec, cont.Stats),
+			}
 		}
 		return writeResult(contStats, w)
 	default:

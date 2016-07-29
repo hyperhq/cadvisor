@@ -23,6 +23,8 @@ type CpuSpec struct {
 	Limit    uint64 `json:"limit"`
 	MaxLimit uint64 `json:"max_limit"`
 	Mask     string `json:"mask,omitempty"`
+	Quota    uint64 `json:"quota,omitempty"`
+	Period   uint64 `json:"period,omitempty"`
 }
 
 type MemorySpec struct {
@@ -70,6 +72,9 @@ type ContainerSpec struct {
 
 // Container reference contains enough information to uniquely identify a container
 type ContainerReference struct {
+	// The container id
+	Id string `json:"id,omitempty"`
+
 	// The absolute name of the container. This is unique on the machine.
 	Name string `json:"name"`
 
@@ -80,6 +85,8 @@ type ContainerReference struct {
 	// Namespace under which the aliases of a container are unique.
 	// An example of a namespace is "docker" for Docker containers.
 	Namespace string `json:"namespace,omitempty"`
+
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // Sorts by container name.
@@ -392,6 +399,9 @@ type FsStats struct {
 	// The block device name associated with the filesystem.
 	Device string `json:"device,omitempty"`
 
+	// Type of the filesytem.
+	Type string `json:"type"`
+
 	// Number of bytes that can be consumed by the container on this filesystem.
 	Limit uint64 `json:"capacity"`
 
@@ -404,6 +414,9 @@ type FsStats struct {
 
 	// Number of bytes available for non-root user.
 	Available uint64 `json:"available"`
+
+	// Number of available Inodes
+	InodesFree uint64 `json:"inodes_free"`
 
 	// Number of reads completed
 	// This is the total number of reads completed successfully.

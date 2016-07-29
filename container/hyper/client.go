@@ -357,13 +357,13 @@ func (client *HyperClient) ListContainers() ([]HyperContainer, error) {
 	for _, container := range containerList["cData"].([]interface{}) {
 		fields := strings.Split(container.(string), ":")
 		var h HyperContainer
-		h.containerID = fields[0]
+		h.ContainerID = fields[0]
 		if len(fields[1]) < 1 {
 			return nil, errors.New("Hyper container name not resolved")
 		}
-		h.name = fields[1][1:]
-		h.podID = fields[2]
-		h.status = fields[3]
+		h.Name = fields[1][1:]
+		h.PodID = fields[2]
+		h.Status = fields[3]
 
 		result = append(result, h)
 	}

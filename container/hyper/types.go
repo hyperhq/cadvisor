@@ -142,10 +142,10 @@ type HyperPod struct {
 }
 
 type HyperContainer struct {
-	containerID string
-	name        string
-	podID       string
-	status      string
+	ContainerID string
+	Name        string
+	PodID       string
+	Status      string
 }
 
 type HyperServiceBackend struct {

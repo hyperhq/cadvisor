@@ -18,9 +18,9 @@ all: format build test
 
 test:
 	@echo ">> running tests"
-	@$(GO) test -short -race $(pkgs)
+	@$(GO) test -tags test -short -race $(pkgs)
 
-test-integration: test
+test-integration: build test
 	@./build/integration.sh
 
 format:
@@ -33,6 +33,7 @@ vet:
 
 build:
 	@echo ">> building binaries"
+	@./build/assets.sh
 	@./build/build.sh
 
 release: build

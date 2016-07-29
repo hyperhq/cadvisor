@@ -21,6 +21,7 @@ import (
 	"github.com/google/cadvisor/container"
 	"github.com/google/cadvisor/fs"
 	info "github.com/google/cadvisor/info/v1"
+	"github.com/google/cadvisor/manager/watcher"
 )
 
 const (
@@ -32,6 +33,7 @@ type hyperFactory struct {
 	client             *HyperClient
 	machineInfoFactory info.MachineInfoFactory
 	fsInfo             fs.FsInfo
+	ignoreMetrics      container.MetricSet
 }
 
 func (self *hyperFactory) String() string {
@@ -61,6 +63,7 @@ func (self *hyperFactory) CanHandleAndAccept(name string) (bool, bool, error) {
 
 	_, err := isHyperVirtualMachine(name)
 	if err != nil {
+		glog.Errorf("isHyperVirtualMachine of hyperFactory failed: %v", err)
 		return false, false, nil
 	}
 
@@ -72,13 +75,14 @@ func (self *hyperFactory) DebugInfo() map[string][]string {
 }
 
 // Register root container before running this function!
-func Register(factory info.MachineInfoFactory, fsInfo fs.FsInfo) error {
+func Register(factory info.MachineInfoFactory, fsInfo fs.FsInfo, ignoreMetrics container.MetricSet) error {
 	glog.Infof("Registering Hyper factory")
 	f := &hyperFactory{
 		client:             NewHyperClient(),
 		machineInfoFactory: factory,
 		fsInfo:             fsInfo,
+		ignoreMetrics:      ignoreMetrics,
 	}
-	container.RegisterContainerHandlerFactory(f)
+	container.RegisterContainerHandlerFactory(f, []watcher.ContainerWatchSource{watcher.Hyper})
 	return nil
 }

@@ -166,11 +166,12 @@ func TestContainerStatsFromV1(t *testing.T) {
 			}},
 		},
 		Filesystem: []v1.FsStats{{
-			Device:    "dev0",
-			Limit:     500,
-			Usage:     100,
-			BaseUsage: 50,
-			Available: 300,
+			Device:     "dev0",
+			Limit:      500,
+			Usage:      100,
+			BaseUsage:  50,
+			Available:  300,
+			InodesFree: 100,
 		}},
 	}
 	expectedV2Stats := ContainerStats{
@@ -351,7 +352,7 @@ func TestInstCpuStats(t *testing.T) {
 		},
 	}
 	for _, c := range tests {
-		got, err := instCpuStats(c.last, c.cur)
+		got, err := InstCpuStats(c.last, c.cur)
 		if err != nil {
 			if c.want == nil {
 				continue

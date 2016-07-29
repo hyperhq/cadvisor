@@ -17,9 +17,11 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -30,73 +32,98 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/cadvisor/integration/common"
-
 	"github.com/golang/glog"
+	cadvisorApi "github.com/google/cadvisor/info/v2"
 )
 
-const cadvisorBinary = "cadvisor"
+// must be able to ssh into hosts without password
+// godep go run ./integration/runner/runner.go --logtostderr --v 2 --ssh-config <.ssh/config file> <list of hosts>
+
+const (
+	cadvisorBinary = "cadvisor"
+	testTimeout    = 15 * time.Minute
+)
 
 var cadvisorTimeout = flag.Duration("cadvisor_timeout", 15*time.Second, "Time to wait for cAdvisor to come up on the remote host")
 var port = flag.Int("port", 8080, "Port in which to start cAdvisor in the remote host")
 var testRetryCount = flag.Int("test-retry-count", 3, "Number of times to retry failed tests before failing.")
 var testRetryWhitelist = flag.String("test-retry-whitelist", "", "Path to newline separated list of regexexp for test failures that should be retried.  If empty, no tests are retried.")
+var sshOptions = flag.String("ssh-options", "", "Commandline options passed to ssh.")
 var retryRegex *regexp.Regexp
+
+func getAttributes(ipAddress, portStr string) (*cadvisorApi.Attributes, error) {
+	// Get host attributes and log attributes if the tests fail.
+	var attributes cadvisorApi.Attributes
+	resp, err := http.Get(fmt.Sprintf("http://%s:%s/api/v2.1/attributes", ipAddress, portStr))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get attributes - %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get attributes. Status code - %v", resp.StatusCode)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read attributes response body - %v", err)
+	}
+	if err := json.Unmarshal(body, &attributes); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal attributes - %v", err)
+	}
+	return &attributes, nil
+}
 
 func RunCommand(cmd string, args ...string) error {
 	output, err := exec.Command(cmd, args...).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("command %q %q failed with error: %v and output: %q", cmd, args, err, output)
+		return fmt.Errorf("command %q %q failed with error: %v and output: %s", cmd, args, err, output)
 	}
 
 	return nil
 }
 
+func RunSshCommand(cmd string, args ...string) error {
+	if *sshOptions != "" {
+		args = append(strings.Split(*sshOptions, " "), args...)
+	}
+	return RunCommand(cmd, args...)
+}
+
 func PushAndRunTests(host, testDir string) error {
 	// Push binary.
 	glog.Infof("Pushing cAdvisor binary to %q...", host)
-	args := common.GetGCComputeArgs("ssh", host, "--", "mkdir", "-p", testDir)
-	err := RunCommand("gcloud", args...)
+
+	err := RunSshCommand("ssh", host, "--", "mkdir", "-p", testDir)
 	if err != nil {
 		return fmt.Errorf("failed to make remote testing directory: %v", err)
 	}
 	defer func() {
-		args := common.GetGCComputeArgs("ssh", host, "--", "rm", "-rf", testDir)
-		err := RunCommand("gcloud", args...)
+		err = RunSshCommand("ssh", host, "--", "rm", "-rf", testDir)
 		if err != nil {
 			glog.Errorf("Failed to cleanup test directory: %v", err)
 		}
 	}()
-	args = common.GetGCComputeArgs("copy-files", cadvisorBinary, fmt.Sprintf("%s:%s", host, testDir))
-	err = RunCommand("gcloud", args...)
+
+	err = RunSshCommand("scp", "-r", cadvisorBinary, fmt.Sprintf("%s:%s", host, testDir))
 	if err != nil {
 		return fmt.Errorf("failed to copy binary: %v", err)
 	}
 
-	// TODO(vmarmol): Get logs in case of failures.
 	// Start cAdvisor.
 	glog.Infof("Running cAdvisor on %q...", host)
 	portStr := strconv.Itoa(*port)
 	errChan := make(chan error)
 	go func() {
-		args = common.GetGCComputeArgs("ssh", host, "--", fmt.Sprintf("sudo %s --port %s --logtostderr", path.Join(testDir, cadvisorBinary), portStr))
-		err = RunCommand("gcloud", args...)
+		err = RunSshCommand("ssh", host, "--", fmt.Sprintf("sudo %s --port %s --logtostderr --docker_env_metadata_whitelist=TEST_VAR  &> %s/log.txt", path.Join(testDir, cadvisorBinary), portStr, testDir))
 		if err != nil {
 			errChan <- fmt.Errorf("error running cAdvisor: %v", err)
 		}
 	}()
 	defer func() {
-		args = common.GetGCComputeArgs("ssh", host, "--", "sudo", "pkill", cadvisorBinary)
-		err := RunCommand("gcloud", args...)
+		err = RunSshCommand("ssh", host, "--", "sudo", "pkill", cadvisorBinary)
 		if err != nil {
 			glog.Errorf("Failed to cleanup: %v", err)
 		}
 	}()
-
-	ipAddress, err := common.GetGceIp(host)
-	if err != nil {
-		return fmt.Errorf("failed to get GCE IP: %v", err)
-	}
 
 	// Wait for cAdvisor to come up.
 	endTime := time.Now().Add(*cadvisorTimeout)
@@ -108,7 +135,7 @@ func PushAndRunTests(host, testDir string) error {
 			return err
 		case <-time.After(500 * time.Millisecond):
 			// Stop waiting when cAdvisor is healthy..
-			resp, err := http.Get(fmt.Sprintf("http://%s:%s/healthz", ipAddress, portStr))
+			resp, err := http.Get(fmt.Sprintf("http://%s:%s/healthz", host, portStr))
 			if err == nil && resp.StatusCode == http.StatusOK {
 				done = true
 				break
@@ -119,6 +146,11 @@ func PushAndRunTests(host, testDir string) error {
 		return fmt.Errorf("timed out waiting for cAdvisor to come up at host %q", host)
 	}
 
+	// Get attributes for debugging purposes.
+	attributes, err := getAttributes(host, portStr)
+	if err != nil {
+		return fmt.Errorf("%v - %q", err, host)
+	}
 	// Run the tests in a retry loop.
 	glog.Infof("Running integration tests targeting %q...", host)
 	for i := 0; i <= *testRetryCount; i++ {
@@ -128,7 +160,8 @@ func PushAndRunTests(host, testDir string) error {
 			glog.Warningf("Retrying (%d of %d) tests on host %s due to error %v", i, *testRetryCount, host, err)
 		}
 		// Run the command
-		err = RunCommand("godep", "go", "test", "github.com/google/cadvisor/integration/tests/...", "--host", host, "--port", portStr)
+
+		err = RunCommand("godep", "go", "test", "--timeout", testTimeout.String(), "github.com/google/cadvisor/integration/tests/...", "--host", host, "--port", portStr, "--ssh-options", *sshOptions)
 		if err == nil {
 			// On success, break out of retry loop
 			break
@@ -136,14 +169,25 @@ func PushAndRunTests(host, testDir string) error {
 
 		// Only retry on test failures caused by these known flaky failure conditions
 		if retryRegex == nil || !retryRegex.Match([]byte(err.Error())) {
-			glog.Warningf("Skipping retry for tests on host %s because error is not whitelisted: %s", host, err.Error())
+			glog.Warningf("Skipping retry for tests on host %s because error is not whitelisted", host)
 			break
 		}
 	}
 	if err != nil {
-		err = fmt.Errorf("error on host %s: %v", host, err)
+		// Copy logs from the host
+		// Declare new error or it will get shadowed by logs, err := <>  and we won't be able to unset it from nil
+		err2 := RunSshCommand("scp", fmt.Sprintf("%s:%s/log.txt", host, testDir), "./")
+		if err2 != nil {
+			return fmt.Errorf("error fetching logs: %v for %v", err2, err)
+		}
+		defer os.Remove("./log.txt")
+		logs, err2 := ioutil.ReadFile("./log.txt")
+		if err2 != nil {
+			return fmt.Errorf("error reading local log file: %v for %v", err2, err)
+		}
+		glog.Errorf("----------------------\nLogs from Host: %q\n%v\n", host, string(logs))
+		err = fmt.Errorf("error on host %s: %v\n%+v", host, err, attributes)
 	}
-
 	return err
 }
 

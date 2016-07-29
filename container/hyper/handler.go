@@ -18,12 +18,14 @@ package hyper
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golang/glog"
 	"github.com/google/cadvisor/container"
 	"github.com/google/cadvisor/fs"
 	info "github.com/google/cadvisor/info/v1"
+	"github.com/google/cadvisor/manager/watcher"
 )
 
 const WatchInterval = 3 * time.Second
@@ -46,6 +48,8 @@ type hyperContainerHandler struct {
 
 	// Time at which this container was created.
 	creationTime time.Time
+
+	sync.Mutex
 }
 
 func newHyperContainerHandler(
@@ -305,9 +309,12 @@ func (self *hyperContainerHandler) ListContainers(listType container.ListType) (
 	}
 
 	ret := make([]info.ContainerReference, 0, len(containers))
+	// lock to protect containers map
+	self.Lock()
+	defer self.Unlock()
 	for _, c := range containers {
-		if c.podID == self.podID {
-			cotainerName := "/hyper/" + c.containerID
+		if c.PodID == self.podID {
+			cotainerName := "/hyper/" + c.ContainerID
 			self.containers[cotainerName] = cotainerName
 			ret = append(ret, info.ContainerReference{
 				Name:      cotainerName,
@@ -319,15 +326,7 @@ func (self *hyperContainerHandler) ListContainers(listType container.ListType) (
 	return ret, nil
 }
 
-func (self *hyperContainerHandler) ListThreads(listType container.ListType) ([]int, error) {
-	return nil, nil
-}
-
-func (self *hyperContainerHandler) ListProcesses(listType container.ListType) ([]int, error) {
-	return nil, nil
-}
-
-func (self *hyperContainerHandler) WatchSubcontainers(events chan container.SubcontainerEvent) error {
+func (self *hyperContainerHandler) WatchSubcontainers(events chan watcher.ContainerEvent) error {
 	// Disable subcontainers watcher since we can't fetch container data now
 	if self != nil {
 		return nil
@@ -353,19 +352,20 @@ func (self *hyperContainerHandler) WatchSubcontainers(events chan container.Subc
 
 				newContainerMap := make(map[string]string)
 				for _, c := range containers {
-					if c.podID != self.podID {
+					if c.PodID != self.podID {
 						continue
 					}
 
-					containerName := "/hyper/" + c.containerID
+					containerName := "/hyper/" + c.ContainerID
 					newContainerMap[containerName] = containerName
 
 					if _, ok := self.containers[containerName]; !ok {
 						self.containers[containerName] = containerName
 						// Deliver the event.
-						events <- container.SubcontainerEvent{
-							EventType: container.SubcontainerAdd,
-							Name:      containerName,
+						events <- watcher.ContainerEvent{
+							EventType:   watcher.ContainerAdd,
+							Name:        containerName,
+							WatchSource: watcher.Hyper,
 						}
 					}
 				}
@@ -374,9 +374,10 @@ func (self *hyperContainerHandler) WatchSubcontainers(events chan container.Subc
 					if _, ok := newContainerMap[k]; !ok {
 						delete(self.containers, k)
 						// Deliver the event.
-						events <- container.SubcontainerEvent{
-							EventType: container.SubcontainerDelete,
-							Name:      k,
+						events <- watcher.ContainerEvent{
+							EventType:   watcher.ContainerDelete,
+							Name:        k,
+							WatchSource: watcher.Hyper,
 						}
 					}
 				}
@@ -385,6 +386,14 @@ func (self *hyperContainerHandler) WatchSubcontainers(events chan container.Subc
 	}(self)
 
 	return nil
+}
+
+func (self *hyperContainerHandler) ListThreads(listType container.ListType) ([]int, error) {
+	return nil, nil
+}
+
+func (self *hyperContainerHandler) ListProcesses(listType container.ListType) ([]int, error) {
+	return nil, nil
 }
 
 func (self *hyperContainerHandler) StopWatchingSubcontainers() error {
@@ -412,3 +421,7 @@ func (self *hyperContainerHandler) Exists() bool {
 
 // Nothing to start up.
 func (self *hyperContainerHandler) Start() {}
+
+func (self *hyperContainerHandler) Type() container.ContainerType {
+	return container.ContainerTypeHyper
+}

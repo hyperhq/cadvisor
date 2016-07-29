@@ -1,14 +1,13 @@
 language: go
 sudo: false
 go:
- - 1.5.3
+ - 1.6.2
 install:
   - mkdir -p $HOME/gopath/src/github.com/google
   - mv $HOME/gopath/src/github.com/hyperhq/cadvisor $HOME/gopath/src/github.com/google/cadvisor
   - cd $HOME/gopath/src/github.com/google/cadvisor
 before_script:
- - go get golang.org/x/tools/cmd/vet
  - go get github.com/kr/godep
 script:
  - export PATH=$PATH:$HOME/gopath/bin
- - ./build/presubmit.sh
+ - make test

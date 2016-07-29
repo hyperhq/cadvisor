@@ -1,5 +1,48 @@
 # Changelog
 
+### 0.23.4 (2016-06-16)
+- Cherry-pick release:
+  - Check for thin_is binary in path for devicemapper when using ThinPoolWatcher
+  - Fix uint64 overflow issue for CPU stats
+
+### 0.23.3 (2016-06-08)
+- Cherry-pick release:
+  - Cap the maximum consecutive du commands
+  - Fix a panic when a prometheus endpoint ends with a newline
+
+### 0.23.2 (2016-05-18)
+- Handle kernel log rotation
+- More rkt support: poll rkt service for new containers
+- Better handling of partial failures when fetching subcontainers
+- Devicemapper thin_ls support (requires Device Mapper kernel module and supporting utilities)
+
+### 0.23.1 (2016-05-11)
+- Add multi-container charts to the UI
+- Add TLS options for Kafka storage driver
+- Switch to official Docker client
+- Systemd:
+  - Ignore .mount cgroups on systemd
+  - Better OOM monitoring
+- Bug: Fix broken -disable_metrics flag
+- Bug: Fix openstack identified as AWS
+- Bug: Fix EventStore when limit is 0
+
+### 0.23.0 (2016-04-21)
+- Docker v1.11 support
+- Preliminary rkt support
+- Bug: Fix file descriptor leak
+
+### 0.22.0 (2016-02-25)
+- Disk usage calculation bug fixes
+- Systemd integration bug fixes
+- Instance ID support for Azure and AWS
+- Limit number of custom metrics
+- Support opt out for disk and network metrics
+
+### 0.21.0 (2016-02-03)
+- Support for filesystem stats with docker v1.10
+- Bug fixes.
+
 ### 0.20.5 (2016-01-27)
 - Breaking: Use uint64 for memory stats
 - Bug: Fix devicemapper partition labelling

@@ -29,6 +29,23 @@ const (
 	HyperNamespace = "hyper"
 )
 
+var (
+	hyperRootDir     string
+	hyperRootDirFlag = flag.String("hyper_root", "/var/lib/hyper", "DEPRECATED: hyper root is read from hyper info (this is a fallback, default: /var/lib/hyper)")
+	hyperRootDirOnce sync.Once
+)
+
+func RootDir(status info.DockerStatus) string {
+	hyperRootDirOnce.Do(func() {
+		if status.RootDir != "" {
+			hyperRootDir = status.RootDir
+		} else {
+			hyperRootDir = *hyperRootDirFlag
+		}
+	})
+	return hyperRootDir
+}
+
 type hyperFactory struct {
 	client             *HyperClient
 	machineInfoFactory info.MachineInfoFactory

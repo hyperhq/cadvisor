@@ -152,7 +152,18 @@ func New(memoryCache *memory.InMemoryCache, sysfs sysfs.SysFs, maxHousekeepingIn
 	glog.Infof("cAdvisor running in container: %q", selfContainer)
 
 	dockerStatus, err := docker.Status()
-	newManager := &manager{}
+	newManager := &manager{
+		containers:               make(map[namespacedContainerName]*containerData),
+		quitChannels:             make([]chan error, 0, 2),
+		memoryCache:              memoryCache,
+		cadvisorContainer:        selfContainer,
+		inHostNamespace:          inHostNamespace,
+		startupTime:              time.Now(),
+		maxHousekeepingInterval:  maxHousekeepingInterval,
+		allowDynamicHousekeeping: allowDynamicHousekeeping,
+		ignoreMetrics:            ignoreMetricsSet,
+		containerWatchers:        []watcher.ContainerWatcher{},
+	}
 	hyperStatus, err := newManager.HyperInfo()
 	if err != nil {
 		glog.Warningf("Unable to connect to Docker: %v", err)
@@ -190,20 +201,8 @@ func New(memoryCache *memory.InMemoryCache, sysfs sysfs.SysFs, maxHousekeepingIn
 	// Register for new subcontainers.
 	eventsChannel := make(chan watcher.ContainerEvent, 16)
 
-	newManager = &manager{
-		containers:               make(map[namespacedContainerName]*containerData),
-		quitChannels:             make([]chan error, 0, 2),
-		memoryCache:              memoryCache,
-		fsInfo:                   fsInfo,
-		cadvisorContainer:        selfContainer,
-		inHostNamespace:          inHostNamespace,
-		startupTime:              time.Now(),
-		maxHousekeepingInterval:  maxHousekeepingInterval,
-		allowDynamicHousekeeping: allowDynamicHousekeeping,
-		ignoreMetrics:            ignoreMetricsSet,
-		containerWatchers:        []watcher.ContainerWatcher{},
-		eventsChannel:            eventsChannel,
-	}
+	newManager.fsInfo = fsInfo
+	newManager.eventsChannel = eventsChannel
 
 	machineInfo, err := machine.Info(sysfs, fsInfo, inHostNamespace)
 	if err != nil {

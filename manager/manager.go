@@ -157,7 +157,6 @@ func New(memoryCache *memory.InMemoryCache, sysfs sysfs.SysFs, maxHousekeepingIn
 		quitChannels:             make([]chan error, 0, 2),
 		memoryCache:              memoryCache,
 		cadvisorContainer:        selfContainer,
-		inHostNamespace:          inHostNamespace,
 		startupTime:              time.Now(),
 		maxHousekeepingInterval:  maxHousekeepingInterval,
 		allowDynamicHousekeeping: allowDynamicHousekeeping,
@@ -203,6 +202,7 @@ func New(memoryCache *memory.InMemoryCache, sysfs sysfs.SysFs, maxHousekeepingIn
 
 	newManager.fsInfo = fsInfo
 	newManager.eventsChannel = eventsChannel
+	newManager.inHostNamespace = inHostNamespace
 
 	machineInfo, err := machine.Info(sysfs, fsInfo, inHostNamespace)
 	if err != nil {

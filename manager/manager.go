@@ -885,7 +885,7 @@ func (m *manager) overrideContainer(containerName string, watchSource watcher.Co
 			return nil
 		}
 
-		err := m.destroyContainerLocked(containerName)
+		err := m.destroyContainerLocked(containerName, watcher.Raw)
 		if err != nil {
 			return fmt.Errorf("overrideContainer: failed to destroy containerData/handler for %v: %v", containerName, err)
 		}
@@ -975,16 +975,19 @@ func (m *manager) createContainerLocked(containerName string, watchSource watche
 	return cont.Start()
 }
 
-func (m *manager) destroyContainer(containerName string) error {
+func (m *manager) destroyContainer(containerName string, source watcher.ContainerWatchSource) error {
 	m.containersLock.Lock()
 	defer m.containersLock.Unlock()
 
-	return m.destroyContainerLocked(containerName)
+	return m.destroyContainerLocked(containerName, source)
 }
 
-func (m *manager) destroyContainerLocked(containerName string) error {
+func (m *manager) destroyContainerLocked(containerName string, source watcher.ContainerWatchSource) error {
 	namespacedName := namespacedContainerName{
 		Name: containerName,
+	}
+	if source == watcher.Hyper {
+		namespacedName.Namespace = hyper.HyperNamespace
 	}
 	cont, ok := m.containers[namespacedName]
 	if !ok {
@@ -1088,7 +1091,7 @@ func (m *manager) detectSubcontainers(containerName string) error {
 
 	// Remove the old containers.
 	for _, cont := range removed {
-		err = m.destroyContainer(cont.Name)
+		err = m.destroyContainer(cont.Name, watcher.Raw)
 		if err != nil {
 			glog.Errorf("Failed to destroy existing container: %s: %s", cont.Name, err)
 		}
@@ -1136,7 +1139,7 @@ func (self *manager) watchForNewContainers(quit chan error) error {
 						err = self.createContainer(event.Name, event.WatchSource)
 					}
 				case event.EventType == watcher.ContainerDelete:
-					err = self.destroyContainer(event.Name)
+					err = self.destroyContainer(event.Name, event.WatchSource)
 				}
 				if err != nil {
 					glog.Warningf("Failed to process watch event %+v: %v", event, err)
